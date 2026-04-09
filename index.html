@@ -973,15 +973,48 @@ display: none;
   <div class="screen" id="screenKlassen">
 
 ```
+<!-- FOTO UPLOAD -->
 <div class="card add-klasse-card">
-  <div class="section-title">Klasse per Sprache hinzufügen</div>
-  <p class="voice-hint" style="margin-bottom:10px;">Sag z.B.: <em>„Klasse Q1b: Mustermann Max, Schmidt Anna, Özdemir Leyla"</em></p>
-  <button class="voice-klasse-btn" id="klasseVoiceBtn" onclick="toggleKlasseRec()">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm-1 15.93V21h2v-2.07A8 8 0 0 0 20 11h-2a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.93z"/></svg>
-    Klasse einsprechen
-  </button>
-  <div class="klasse-transcript" id="klasseTranscript"></div>
-  <button class="btn-accent" id="klasseParseBtn" onclick="parseKlasse()" style="display:none;">Klasse speichern →</button>
+  <div class="section-title">Klassenliste per Foto</div>
+  <p class="voice-hint" style="margin-bottom:12px;">Screenshot aus dem Klassenbuch hochladen — Namen werden automatisch erkannt.</p>
+
+  <label for="photoInput" style="display:block;width:100%;">
+    <div class="voice-klasse-btn" id="photoUploadBtn" style="border-style:dashed;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8" stroke="currentColor" stroke-width="2" fill="none"/><line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" stroke-width="2"/></svg>
+      Foto / Screenshot auswählen
+    </div>
+  </label>
+  <input type="file" id="photoInput" accept="image/*" style="display:none;" onchange="handlePhoto(this)">
+
+  <div class="klasse-transcript" id="photoStatus"></div>
+
+  <!-- Preview of detected names -->
+  <div id="photoPreview" style="display:none;margin-top:12px;">
+    <div class="field-group">
+      <div class="field-label">Erkannter Klassenname</div>
+      <input class="field" id="photoKlasseName" placeholder="z.B. 5D">
+    </div>
+    <div class="field-group" style="margin-top:8px;">
+      <div class="field-label">Erkannte Namen (einen pro Zeile, editierbar)</div>
+      <textarea class="field" id="photoNames" style="min-height:160px;line-height:1.7;" placeholder="Akkermann Jonathan&#10;Büker Justus&#10;..."></textarea>
+    </div>
+    <button class="btn-accent show" onclick="savePhotoKlasse()">Klasse speichern →</button>
+  </div>
+</div>
+
+<!-- MANUAL ENTRY -->
+<div class="card" style="margin-bottom:12px;">
+  <div class="section-title">Klasse manuell eingeben</div>
+  <div class="field-group">
+    <div class="field-label">Klassenname</div>
+    <input class="field" id="manualKlasseName" placeholder="z.B. Q1b">
+  </div>
+  <div class="field-group" style="margin-top:8px;">
+    <div class="field-label">Namen (einen pro Zeile)</div>
+    <textarea class="field" id="manualNames" style="min-height:120px;line-height:1.7;"
+      placeholder="Mustermann Max&#10;Schmidt Anna&#10;Özdemir Leyla"></textarea>
+  </div>
+  <button class="btn-accent show" style="margin-top:10px;" onclick="saveManualKlasse()">Speichern →</button>
 </div>
 
 <div class="section-title">Gespeicherte Klassen</div>
@@ -1623,96 +1656,106 @@ Ton: sachlich, professionell, beobachtend. Keine Wertungen.`
 // ══════════════════════════════════════════════
 // KLASSEN MANAGEMENT
 // ══════════════════════════════════════════════
-function setupKlasseRecog() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return;
-  S.recogK = new SR();
-  S.recogK.lang = 'de-DE';
-  S.recogK.continuous = true;
-  S.recogK.interimResults = true;
-  S.recogK.onresult = e => {
-    let fin = '', int = '';
-    for (const r of e.results) {
-      if (r.isFinal) fin += r[0].transcript + ' ';
-      else int += r[0].transcript;
-    }
-    S.ktranscript = fin;
-    const box = document.getElementById('klasseTranscript');
-    box.textContent = (fin + int) || '…';
-    box.classList.add('show');
-    if (fin.trim()) {
-      document.getElementById('klasseParseBtn').style.display = 'block';
-    }
-  };
-  S.recogK.onerror = () => stopKlasseRec();
-  S.recogK.onend   = () => { if (S.recKlasse) stopKlasseRec(); };
-}
+// ══════════════════════════════════════════════
+// KLASSEN — FOTO UPLOAD
+// ══════════════════════════════════════════════
+async function handlePhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
 
-function toggleKlasseRec() {
-  if (!S.recogK) setupKlasseRecog();
-  S.recKlasse ? stopKlasseRec() : startKlasseRec();
-}
-function startKlasseRec() {
-  if (!S.recogK) return;
-  S.recKlasse = true;
-  S.ktranscript = '';
-  const btn = document.getElementById('klasseVoiceBtn');
-  btn.classList.add('rec');
-  btn.innerHTML = `<svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm-1 15.93V21h2v-2.07A8 8 0 0 0 20 11h-2a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.93z"/></svg> Aufnahme stoppen`;
-  document.getElementById('klasseTranscript').classList.add('show');
-  document.getElementById('klasseTranscript').textContent = '…';
-  try { S.recogK.start(); } catch(e){}
-}
-function stopKlasseRec() {
-  S.recKlasse = false;
-  const btn = document.getElementById('klasseVoiceBtn');
-  btn.classList.remove('rec');
-  btn.innerHTML = `<svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm-1 15.93V21h2v-2.07A8 8 0 0 0 20 11h-2a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.93z"/></svg> Klasse einsprechen`;
-  try { S.recogK.stop(); } catch(e){}
-}
+  const status = document.getElementById('photoStatus');
+  status.textContent = 'Bild wird analysiert…';
+  status.classList.add('show');
+  document.getElementById('photoPreview').style.display = 'none';
 
-async function parseKlasse() {
-  const text = S.ktranscript.trim();
-  if (!text) return;
-
-  const btn = document.getElementById('klasseParseBtn');
-  btn.innerHTML = `Analysiere <span class="dots"><i></i><i></i><i></i></span>`;
-  btn.disabled = true;
+  // Convert to base64
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        model:'claude-sonnet-4-20250514', max_tokens:500,
-        system:`Extrahiere aus dem Text einen Klassennamen und eine Liste von Schülernamen. Antworte NUR mit JSON ohne Markdown:
-{"klasse":"Q1b","names":["Mustermann","Schmidt","Özdemir"]}
-Regeln: Nur Nachnamen wenn möglich. Klassenname erkennen (z.B. Q1b, 10a, EF). Wenn kein Klassenname erkennbar, verwende "Unbekannt".`,
-        messages:[{role:'user', content:text}]
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: `Du erkennst Schülernamen aus einem Screenshot einer Klassenliste. 
+Antworte NUR mit JSON ohne Markdown:
+{"klasse":"5D","names":["Akkermann Jonathan","Büker Justus"]}
+Regeln: Vollständige Namen (Nachname Vorname). Klassenname aus dem Bild. Abgeschnittene Namen so vollständig wie erkennbar.`,
+        messages: [{
+          role: 'user',
+          content: [{
+            type: 'image',
+            source: { type: 'base64', media_type: file.type || 'image/jpeg', data: base64 }
+          }, {
+            type: 'text',
+            text: 'Erkenne alle Schülernamen und den Klassenamen aus diesem Screenshot.'
+          }]
+        }]
       })
     });
-    const data = await res.json();
-    const raw  = (data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim();
+
+    const data   = await res.json();
+    const raw    = (data.content?.[0]?.text || '{}').replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(raw);
 
-    if (parsed.klasse && parsed.names?.length) {
-      const klassen = getKlassen();
-      klassen[parsed.klasse] = parsed.names;
-      saveKlassen(klassen);
-      renderKlassen();
-      toast(`Klasse ${parsed.klasse} mit ${parsed.names.length} Namen gespeichert`, 'ok');
-
-      // Reset
-      document.getElementById('klasseTranscript').classList.remove('show');
-      document.getElementById('klasseParseBtn').style.display = 'none';
-      S.ktranscript = '';
+    if (parsed.names?.length) {
+      document.getElementById('photoKlasseName').value = parsed.klasse || '';
+      document.getElementById('photoNames').value = parsed.names.join('\n');
+      document.getElementById('photoPreview').style.display = 'block';
+      status.textContent = `${parsed.names.length} Namen erkannt — bitte prüfen und ggf. korrigieren.`;
     } else {
-      toast('Kein Klassenname erkannt — bitte nochmal.', 'err');
+      status.textContent = 'Keine Namen erkannt. Bitte manuell eingeben.';
     }
-  } catch {
-    toast('Fehler beim Parsen.', 'err');
+  } catch (err) {
+    status.textContent = 'Fehler bei der Erkennung. Bitte manuell eingeben.';
   }
-  btn.disabled = false;
-  btn.textContent = 'Klasse speichern →';
+
+  // Reset input so same file can be re-selected
+  input.value = '';
+}
+
+function savePhotoKlasse() {
+  const name  = document.getElementById('photoKlasseName').value.trim();
+  const raw   = document.getElementById('photoNames').value;
+  const names = raw.split('\n').map(n => n.trim()).filter(Boolean);
+
+  if (!name) { toast('Bitte Klassennamen eingeben', 'err'); return; }
+  if (!names.length) { toast('Keine Namen gefunden', 'err'); return; }
+
+  const klassen = getKlassen();
+  klassen[name] = names;
+  saveKlassen(klassen);
+  renderKlassen();
+  toast(`Klasse ${name} mit ${names.length} Namen gespeichert`, 'ok');
+
+  document.getElementById('photoPreview').style.display = 'none';
+  document.getElementById('photoStatus').classList.remove('show');
+  document.getElementById('photoKlasseName').value = '';
+  document.getElementById('photoNames').value = '';
+}
+
+function saveManualKlasse() {
+  const name  = document.getElementById('manualKlasseName').value.trim();
+  const raw   = document.getElementById('manualNames').value;
+  const names = raw.split('\n').map(n => n.trim()).filter(Boolean);
+
+  if (!name) { toast('Bitte Klassennamen eingeben', 'err'); return; }
+  if (!names.length) { toast('Keine Namen eingegeben', 'err'); return; }
+
+  const klassen = getKlassen();
+  klassen[name] = names;
+  saveKlassen(klassen);
+  renderKlassen();
+  toast(`Klasse ${name} mit ${names.length} Namen gespeichert`, 'ok');
+
+  document.getElementById('manualKlasseName').value = '';
+  document.getElementById('manualNames').value = '';
 }
 
 function renderKlassen() {
