@@ -118,10 +118,11 @@ flex-shrink: 0;
 /* ── SCREENS ─────────────────────────────── */
 .screens {
 position: fixed;
-top: var(–header-h);
-bottom: calc(var(–nav-h) + var(–safe-b));
+top: 0;
+bottom: 0;
 left: 0; right: 0;
 overflow: hidden;
+/* top/bottom set dynamically by JS */
 }
 
 .screen {
@@ -415,7 +416,7 @@ cursor: pointer;
 /* sits above nav, inside log screen area */
 .save-bar {
 position: fixed;
-bottom: calc(var(–nav-h) + var(–safe-b));
+bottom: 0; /* set by JS */
 left: 0; right: 0;
 padding: 10px 18px;
 background: var(–bg);
@@ -1075,6 +1076,23 @@ function namesForKlasse(klasse) {
 // INIT
 // ══════════════════════════════════════════════
 function init() {
+  // Dynamic layout — measure actual header and nav heights
+  function applyLayout() {
+    const header  = document.querySelector('.header');
+    const nav     = document.querySelector('.nav');
+    const screens = document.querySelector('.screens');
+    const saveBar = document.getElementById('saveBar');
+    if (!header || !nav || !screens) return;
+    const hh = header.offsetHeight;
+    const nh = nav.offsetHeight;
+    screens.style.top    = hh + 'px';
+    screens.style.bottom = nh + 'px';
+    if (saveBar) saveBar.style.bottom = nh + 'px';
+  }
+  applyLayout();
+  window.addEventListener('resize', applyLayout);
+  // Re-apply after fonts load (can shift header height)
+  document.fonts.ready.then(applyLayout);
   // Date
   document.getElementById('headerDate').textContent =
     new Date().toLocaleDateString('de-DE', {weekday:'short', day:'2-digit', month:'2-digit'});
